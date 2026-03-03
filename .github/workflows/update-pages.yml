@@ -1,0 +1,386 @@
+name: Update GitHub Pages
+
+on:
+  repository_dispatch:
+    types: [update-pages]
+  workflow_dispatch:
+  # Also rebuild pages after every central release
+  workflow_run:
+    workflows: ["Central Release"]
+    types: [completed]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Fetch all releases from GitHub API
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p _site
+
+          # Fetch all releases (up to 100)
+          gh api "repos/$GH_REPO/releases?per_page=100" > /tmp/all_releases.json
+
+          echo "Fetched $(jq length /tmp/all_releases.json) releases"
+
+      - name: Generate site
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # ─────────────────────────────────────────────
+          # Package metadata — name, category, description
+          # ─────────────────────────────────────────────
+          declare -A PKG_LABEL=(
+            [gcc]="GCC"
+            [coreutils]="Coreutils"
+            [binutils]="Binutils"
+            [strace]="strace"
+            [nodejs]="Node.js"
+            [openjdk]="OpenJDK"
+            [dotnet-sdk]="\.NET SDK"
+            [pytorch]="PyTorch"
+            [transformers]="Transformers"
+            [onnxruntime]="ONNX Runtime"
+            [tensorflow]="TensorFlow"
+            [bazelisk]="Bazelisk"
+            [kubernetes]="Kubernetes"
+          )
+
+          declare -A PKG_CATEGORY=(
+            [gcc]="Compilers & Toolchains"
+            [coreutils]="Compilers & Toolchains"
+            [binutils]="Compilers & Toolchains"
+            [strace]="Compilers & Toolchains"
+            [nodejs]="Runtimes"
+            [openjdk]="Runtimes"
+            [dotnet-sdk]="Runtimes"
+            [pytorch]="ML Frameworks"
+            [transformers]="ML Frameworks"
+            [onnxruntime]="ML Frameworks"
+            [tensorflow]="ML Frameworks"
+            [bazelisk]="Build Tools"
+            [kubernetes]="Infrastructure"
+          )
+
+          declare -A PKG_DESC=(
+            [gcc]="GNU Compiler Collection — C, C++, Fortran and more"
+            [coreutils]="GNU core utilities — ls, cp, mv, cat and friends"
+            [binutils]="GNU binary utilities — as, ld, objdump and more"
+            [strace]="System call tracer for Linux"
+            [nodejs]="JavaScript runtime built on V8"
+            [openjdk]="Open-source Java Development Kit"
+            [dotnet-sdk]=".NET SDK — build, run and publish .NET apps"
+            [pytorch]="Machine learning framework by Meta"
+            [transformers]="Hugging Face Transformers library"
+            [onnxruntime]="Cross-platform ML inference engine by Microsoft"
+            [tensorflow]="Machine learning platform by Google"
+            [bazelisk]="User-friendly launcher for Bazel"
+            [kubernetes]="Container orchestration system"
+          )
+
+          ALL_PKGS=(gcc coreutils binutils strace nodejs openjdk dotnet-sdk pytorch transformers onnxruntime tensorflow bazelisk kubernetes)
+
+          # ─────────────────────────────────────────────
+          # CSS shared across all pages
+          # ─────────────────────────────────────────────
+          CSS='
+          @import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap");
+          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+          :root {
+            --bg: #fafafa;
+            --surface: #ffffff;
+            --border: #e2e2e2;
+            --border-strong: #c8c8c8;
+            --text: #1a1a1a;
+            --text-muted: #666;
+            --text-faint: #999;
+            --accent: #0066cc;
+            --accent-hover: #0052a3;
+            --green: #1a7f37;
+            --mono: "IBM Plex Mono", monospace;
+            --sans: "IBM Plex Sans", sans-serif;
+          }
+          body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; }
+          a { color: var(--accent); text-decoration: none; }
+          a:hover { text-decoration: underline; color: var(--accent-hover); }
+          .site-header { border-bottom: 1px solid var(--border); background: var(--surface); padding: 0 24px; }
+          .header-inner { max-width: 960px; margin: 0 auto; display: flex; align-items: center; gap: 16px; height: 52px; }
+          .site-logo { font-family: var(--mono); font-size: 15px; font-weight: 500; color: var(--text); letter-spacing: -0.3px; }
+          .site-logo span { color: var(--accent); }
+          .header-sub { color: var(--text-muted); font-size: 13px; border-left: 1px solid var(--border); padding-left: 16px; }
+          .container { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+          .breadcrumb { font-family: var(--mono); font-size: 12px; color: var(--text-muted); margin-bottom: 24px; }
+          .breadcrumb a { color: var(--text-muted); }
+          .breadcrumb a:hover { color: var(--accent); }
+          .breadcrumb span { color: var(--text-faint); margin: 0 6px; }
+          h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+          h2 { font-size: 15px; font-weight: 500; margin-bottom: 16px; color: var(--text); }
+          .page-desc { color: var(--text-muted); font-size: 13px; margin-bottom: 28px; }
+          table { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); margin-bottom: 32px; }
+          thead { background: #f3f3f3; }
+          th { font-family: var(--mono); font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 12px; text-align: left; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+          td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+          tr:last-child td { border-bottom: none; }
+          tr:hover td { background: #f7f7f7; }
+          .mono { font-family: var(--mono); font-size: 12px; }
+          .badge { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 7px; border-radius: 3px; border: 1px solid var(--border); background: #f3f3f3; color: var(--text-muted); }
+          .badge-green { border-color: #b7dfb8; background: #f0faf0; color: var(--green); }
+          .dl-btn { display: inline-block; font-family: var(--mono); font-size: 12px; padding: 3px 10px; border: 1px solid var(--accent); border-radius: 3px; color: var(--accent); white-space: nowrap; }
+          .dl-btn:hover { background: var(--accent); color: white; text-decoration: none; }
+          .category-label { font-family: var(--mono); font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.5px; padding: 20px 0 8px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+          .pkg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: 32px; }
+          .pkg-card { background: var(--surface); padding: 16px 18px; transition: background 0.1s; }
+          .pkg-card:hover { background: #f5f8ff; }
+          .pkg-card-name { font-family: var(--mono); font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+          .pkg-card-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.5; }
+          .pkg-card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+          .install-block { background: #1e1e1e; border-radius: 4px; padding: 14px 16px; margin: 8px 0 20px; }
+          .install-block code { font-family: var(--mono); font-size: 12px; color: #d4d4d4; display: block; line-height: 1.8; white-space: pre; }
+          .install-block .comment { color: #6a9955; }
+          .section-title { font-size: 13px; font-weight: 500; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-family: var(--mono); margin: 28px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+          .doc-block { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: 20px 24px; margin-bottom: 24px; font-size: 13px; line-height: 1.8; color: var(--text-muted); }
+          .doc-block p { margin-bottom: 10px; }
+          .doc-block p:last-child { margin-bottom: 0; }
+          .footer { border-top: 1px solid var(--border); padding: 20px 24px; text-align: center; font-size: 12px; color: var(--text-faint); font-family: var(--mono); margin-top: 40px; }
+          .updated { font-family: var(--mono); font-size: 11px; color: var(--text-faint); margin-bottom: 24px; }
+          '
+
+          # ─────────────────────────────────────────────
+          # Helper: page shell
+          # ─────────────────────────────────────────────
+          page_head() {
+            local title="$1"
+            echo "<!DOCTYPE html><html lang='en'><head>"
+            echo "<meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'>"
+            echo "<title>${title} — Cloud-V RISC-V Packages</title>"
+            echo "<style>${CSS}</style></head><body>"
+            echo "<header class='site-header'><div class='header-inner'>"
+            echo "<div class='site-logo'>Cloud-V <span>/</span> RISC-V Packages</div>"
+            echo "<div class='header-sub'>Prebuilt binaries for RISC-V 64-bit Linux</div>"
+            echo "</div></header>"
+          }
+
+          page_foot() {
+            echo "<div class='footer'>Generated $(date -u '+%Y-%m-%d %H:%M UTC') · <a href='https://github.com/${GH_REPO}'>GitHub</a> · Cloud-V</div>"
+            echo "</body></html>"
+          }
+
+          # ─────────────────────────────────────────────
+          # Build per-package release data from API
+          # ─────────────────────────────────────────────
+          # Map release assets to packages
+          for PKG in "${ALL_PKGS[@]}"; do
+            mkdir -p "_site/${PKG}"
+            # Extract assets matching this package from all releases
+            jq --arg pkg "$PKG" '[
+              .[] | {
+                tag: .tag_name,
+                date: .published_at,
+                url: .html_url,
+                assets: [.assets[] | select(.name | ascii_downcase | contains($pkg)) | {name: .name, url: .browser_download_url, size: .size}]
+              } | select(.assets | length > 0)
+            ]' /tmp/all_releases.json > "/tmp/${PKG}_releases.json"
+          done
+
+          # ─────────────────────────────────────────────
+          # INDEX PAGE
+          # ─────────────────────────────────────────────
+          {
+            page_head "Package Index"
+            echo "<div class='container'>"
+            echo "<div class='breadcrumb'><a href='/'>cloud-v-10xe.github.io/cloudv-repos</a></div>"
+            echo "<h1>RISC-V Package Archive</h1>"
+            echo "<p class='page-desc'>Prebuilt binaries for RISC-V 64-bit Linux (riscv64). All packages are built from upstream sources on native RISC-V hardware.</p>"
+            echo "<div class='updated'>Last updated: $(date -u '+%Y-%m-%d %H:%M UTC')</div>"
+
+            # Group by category
+            declare -A CATEGORIES_DONE
+            for CAT in "Compilers & Toolchains" "Runtimes" "ML Frameworks" "Build Tools" "Infrastructure"; do
+              echo "<div class='category-label'>${CAT}</div>"
+              echo "<div class='pkg-grid'>"
+              for PKG in "${ALL_PKGS[@]}"; do
+                if [ "${PKG_CATEGORY[$PKG]}" = "$CAT" ]; then
+                  # Get latest version
+                  LATEST=$(jq -r '.[0].tag // "—"' "/tmp/${PKG}_releases.json" 2>/dev/null || echo "—")
+                  COUNT=$(jq 'length' "/tmp/${PKG}_releases.json" 2>/dev/null || echo "0")
+                  echo "<a class='pkg-card' href='/${PKG}/' style='display:block;color:inherit;text-decoration:none;'>"
+                  echo "<div class='pkg-card-name'>${PKG_LABEL[$PKG]}</div>"
+                  echo "<div class='pkg-card-desc'>${PKG_DESC[$PKG]}</div>"
+                  echo "<div class='pkg-card-meta'>"
+                  if [ "$LATEST" != "—" ]; then
+                    echo "<span class='badge badge-green'>${LATEST}</span>"
+                  fi
+                  echo "<span class='badge'>${COUNT} release(s)</span>"
+                  echo "</div></a>"
+                fi
+              done
+              echo "</div>"
+            done
+
+            echo "</div>"
+            page_foot
+          } > _site/index.html
+
+          # ─────────────────────────────────────────────
+          # PER-PACKAGE INDEX PAGE  (e.g. /gcc/)
+          # ─────────────────────────────────────────────
+          for PKG in "${ALL_PKGS[@]}"; do
+            LABEL="${PKG_LABEL[$PKG]}"
+            DESC="${PKG_DESC[$PKG]}"
+            RELEASES_FILE="/tmp/${PKG}_releases.json"
+            COUNT=$(jq 'length' "$RELEASES_FILE" 2>/dev/null || echo "0")
+
+            # Read doc file if it exists
+            DOC_CONTENT=""
+            if [ -f "docs/${PKG}/README.md" ]; then
+              DOC_CONTENT=$(cat "docs/${PKG}/README.md")
+            fi
+
+            {
+              page_head "$LABEL"
+              echo "<div class='container'>"
+              echo "<div class='breadcrumb'><a href='/'>index</a><span>/</span>${PKG}</div>"
+              echo "<h1>${LABEL}</h1>"
+              echo "<p class='page-desc'>${DESC}</p>"
+
+              # Doc block
+              if [ -n "$DOC_CONTENT" ]; then
+                echo "<div class='section-title'>About</div>"
+                echo "<div class='doc-block'><p>$(echo "$DOC_CONTENT" | head -20 | sed 's/^#.*$//' | sed '/^$/d' | head -5 | tr '\n' ' ')</p></div>"
+              fi
+
+              # Releases table
+              echo "<div class='section-title'>Releases (${COUNT})</div>"
+              if [ "$COUNT" -gt 0 ]; then
+                echo "<table><thead><tr><th>Version / Tag</th><th>Date</th><th>Assets</th><th></th></tr></thead><tbody>"
+                jq -r '.[] | "\(.tag)\t\(.date)\t\(.url)\t\(.assets | length)"' "$RELEASES_FILE" | while IFS=$'\t' read -r TAG DATE RURL NASSETS; do
+                  DATESTR=$(echo "$DATE" | cut -c1-10)
+                  echo "<tr>"
+                  echo "<td><span class='mono'>${TAG}</span></td>"
+                  echo "<td><span class='mono'>${DATESTR}</span></td>"
+                  echo "<td><span class='badge'>${NASSETS} file(s)</span></td>"
+                  echo "<td><a class='dl-btn' href='/${PKG}/${TAG}/'>view →</a></td>"
+                  echo "</tr>"
+                done
+                echo "</tbody></table>"
+              else
+                echo "<p style='color:var(--text-muted);font-size:13px;padding:16px 0;'>No releases found yet. Check back after the next build.</p>"
+              fi
+
+              echo "</div>"
+              page_foot
+            } > "_site/${PKG}/index.html"
+
+            # ───────────────────────────────────────────
+            # PER-VERSION PAGE  (e.g. /gcc/14.2.0/)
+            # ───────────────────────────────────────────
+            jq -c '.[]' "$RELEASES_FILE" | while read -r RELEASE; do
+              TAG=$(echo "$RELEASE" | jq -r '.tag')
+              DATE=$(echo "$RELEASE" | jq -r '.date' | cut -c1-10)
+              RURL=$(echo "$RELEASE" | jq -r '.url')
+
+              mkdir -p "_site/${PKG}/${TAG}"
+
+              {
+                page_head "${LABEL} ${TAG}"
+                echo "<div class='container'>"
+                echo "<div class='breadcrumb'><a href='/'>index</a><span>/</span><a href='/${PKG}/'>${PKG}</a><span>/</span>${TAG}</div>"
+                echo "<h1>${LABEL} <span style='font-weight:300;color:var(--text-muted)'>${TAG}</span></h1>"
+                echo "<p class='page-desc'>Released ${DATE} · <a href='${RURL}'>View GitHub Release</a></p>"
+
+                # Assets table
+                echo "<div class='section-title'>Downloads</div>"
+                echo "<table><thead><tr><th>Filename</th><th>Size</th><th></th></tr></thead><tbody>"
+                echo "$RELEASE" | jq -r '.assets[] | "\(.name)\t\(.size)\t\(.url)"' | while IFS=$'\t' read -r FNAME FSIZE FURL; do
+                  # Convert bytes to human readable
+                  if [ "$FSIZE" -gt 1048576 ]; then
+                    HSIZE="$(echo "scale=1; $FSIZE/1048576" | bc) MB"
+                  elif [ "$FSIZE" -gt 1024 ]; then
+                    HSIZE="$(echo "scale=1; $FSIZE/1024" | bc) KB"
+                  else
+                    HSIZE="${FSIZE} B"
+                  fi
+                  echo "<tr>"
+                  echo "<td><span class='mono'>${FNAME}</span></td>"
+                  echo "<td><span class='mono' style='color:var(--text-muted)'>${HSIZE}</span></td>"
+                  echo "<td><a class='dl-btn' href='${FURL}'>download</a></td>"
+                  echo "</tr>"
+                done
+                echo "</tbody></table>"
+
+                # Install instructions
+                echo "<div class='section-title'>Installation</div>"
+                echo "<div class='install-block'><code>"
+                echo "<span class='comment'># Download</span>"
+                FIRST_ASSET=$(echo "$RELEASE" | jq -r '.assets[0].name // ""')
+                FIRST_URL=$(echo "$RELEASE" | jq -r '.assets[0].url // ""')
+                if [ -n "$FIRST_URL" ]; then
+                  echo "wget ${FIRST_URL}"
+                  # Detect type and give appropriate install instructions
+                  if echo "$FIRST_ASSET" | grep -q "\.tar\.gz$"; then
+                    echo ""
+                    echo "<span class='comment'># Extract</span>"
+                    echo "tar -xzf ${FIRST_ASSET}"
+                    echo ""
+                    echo "<span class='comment'># Install (copy to /usr/local)</span>"
+                    echo "sudo cp -r * /usr/local/"
+                  elif echo "$FIRST_ASSET" | grep -q "\.whl$"; then
+                    echo ""
+                    echo "<span class='comment'># Install Python wheel</span>"
+                    echo "pip install ${FIRST_ASSET}"
+                  else
+                    echo ""
+                    echo "<span class='comment'># Make executable and move to PATH</span>"
+                    echo "chmod +x ${FIRST_ASSET}"
+                    echo "sudo mv ${FIRST_ASSET} /usr/local/bin/"
+                  fi
+                fi
+                echo "</code></div>"
+
+                # Doc block
+                if [ -f "docs/${PKG}/README.md" ]; then
+                  echo "<div class='section-title'>Documentation</div>"
+                  echo "<div class='doc-block'>"
+                  # Render markdown as plain paragraphs (simple conversion)
+                  grep -v '^#' "docs/${PKG}/README.md" | grep -v '^```' | grep -v '^$' | head -30 | while read -r LINE; do
+                    echo "<p>${LINE}</p>"
+                  done
+                  echo "</div>"
+                fi
+
+                echo "</div>"
+                page_foot
+              } > "_site/${PKG}/${TAG}/index.html"
+            done
+          done
+
+          echo "Site generation complete."
+          find _site -name "*.html" | wc -l | xargs echo "Total HTML files generated:"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
