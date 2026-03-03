@@ -47,12 +47,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            git \
-            rsync \
-            jq \
-            curl \
-            wget
+            build-essential git rsync jq curl wget
 
       - name: Check environment
         run: |
@@ -88,7 +83,8 @@ jobs:
           cd kubernetes
           go mod download
           echo "Building Kubernetes for linux/amd64..."
-          KUBE_BUILD_PLATFORMS=linux/amd64 make all WHAT="cmd/kube-apiserver cmd/kube-controller-manager cmd/kube-scheduler cmd/kubelet cmd/kube-proxy cmd/kubectl cmd/kubeadm"
+          KUBE_BUILD_PLATFORMS=linux/amd64 make all \
+            WHAT="cmd/kube-apiserver cmd/kube-controller-manager cmd/kube-scheduler cmd/kubelet cmd/kube-proxy cmd/kubectl cmd/kubeadm"
           echo "Build completed!"
 
       - name: Download CNI plugins for x86_64
@@ -128,9 +124,10 @@ jobs:
           done
 
           cp -rv "$GITHUB_WORKSPACE/cni-plugins-amd64/"* "$GITHUB_WORKSPACE/k8s-x86_64-binaries/cni/"
-          cp -v "$GITHUB_WORKSPACE/flannel/dist/flanneld-amd64" "$GITHUB_WORKSPACE/k8s-x86_64-binaries/flannel/flanneld"
+          cp -v "$GITHUB_WORKSPACE/flannel/dist/flanneld-amd64" \
+            "$GITHUB_WORKSPACE/k8s-x86_64-binaries/flannel/flanneld"
 
-          cat > "$GITHUB_WORKSPACE/k8s-x86_64-binaries/install.sh" << 'EOF'
+          cat > "$GITHUB_WORKSPACE/k8s-x86_64-binaries/install.sh" << 'INSTALL'
           #!/bin/bash
           set -e
           echo "Installing Kubernetes binaries..."
@@ -143,19 +140,27 @@ jobs:
           echo "Installing Flannel..."
           sudo cp -v flannel/flanneld /usr/local/bin/
           sudo chmod +x /usr/local/bin/flanneld
-          echo "✅ Installation complete!"
-          EOF
+          echo "Installation complete!"
+          INSTALL
 
           chmod +x "$GITHUB_WORKSPACE/k8s-x86_64-binaries/install.sh"
 
-          tar -czf "$GITHUB_WORKSPACE/kubernetes-${{ needs.get-versions.outputs.k8s_tag }}-x86_64-linux.tar.gz" \
+          tar -czf \
+            "$GITHUB_WORKSPACE/kubernetes-${{ needs.get-versions.outputs.k8s_tag }}-x86_64-linux.tar.gz" \
             -C "$GITHUB_WORKSPACE/k8s-x86_64-binaries" .
 
-      - name: Upload x86_64 artifacts
+      - name: Upload x86_64 artifact
         uses: actions/upload-artifact@v4
         with:
           name: kubernetes-${{ needs.get-versions.outputs.k8s_tag }}-x86_64-linux
           path: ${{ github.workspace }}/kubernetes-${{ needs.get-versions.outputs.k8s_tag }}-x86_64-linux.tar.gz
+
+      - name: Trigger Pages update
+        if: success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: update-pages
 
   build-riscv:
     needs: get-versions
@@ -167,12 +172,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            git \
-            rsync \
-            jq \
-            curl \
-            wget
+            build-essential git rsync jq curl wget
 
       - name: Clean workspace with elevated permissions
         run: |
@@ -210,7 +210,9 @@ jobs:
           git config --global core.compression 0
 
           rm -rf "$GITHUB_WORKSPACE/kubernetes"
-          git clone --depth=1 --no-tags https://github.com/kubernetes/kubernetes.git "$GITHUB_WORKSPACE/kubernetes"
+          git clone --depth=1 --no-tags \
+            https://github.com/kubernetes/kubernetes.git \
+            "$GITHUB_WORKSPACE/kubernetes"
           cd "$GITHUB_WORKSPACE/kubernetes"
           git fetch --depth=1 origin tag "${{ needs.get-versions.outputs.k8s_tag }}"
           git checkout FETCH_HEAD
@@ -220,7 +222,8 @@ jobs:
           cd "$GITHUB_WORKSPACE/kubernetes"
           go mod download
           echo "Building Kubernetes for linux/riscv64..."
-          KUBE_BUILD_PLATFORMS=linux/riscv64 make all WHAT="cmd/kube-apiserver cmd/kube-controller-manager cmd/kube-scheduler cmd/kubelet cmd/kube-proxy cmd/kubectl cmd/kubeadm"
+          KUBE_BUILD_PLATFORMS=linux/riscv64 make all \
+            WHAT="cmd/kube-apiserver cmd/kube-controller-manager cmd/kube-scheduler cmd/kubelet cmd/kube-proxy cmd/kubectl cmd/kubeadm"
           echo "Build completed!"
 
       - name: Build CNI plugins for RISC-V
@@ -266,9 +269,10 @@ jobs:
           done
 
           cp -rv "$GITHUB_WORKSPACE/cni-plugins/bin/"* "$GITHUB_WORKSPACE/k8s-riscv64-binaries/cni/"
-          cp -v "$GITHUB_WORKSPACE/flannel/dist/flanneld" "$GITHUB_WORKSPACE/k8s-riscv64-binaries/flannel/"
+          cp -v "$GITHUB_WORKSPACE/flannel/dist/flanneld" \
+            "$GITHUB_WORKSPACE/k8s-riscv64-binaries/flannel/"
 
-          cat > "$GITHUB_WORKSPACE/k8s-riscv64-binaries/install.sh" << 'EOF'
+          cat > "$GITHUB_WORKSPACE/k8s-riscv64-binaries/install.sh" << 'INSTALL'
           #!/bin/bash
           set -e
           echo "Installing Kubernetes binaries..."
@@ -281,16 +285,24 @@ jobs:
           echo "Installing Flannel..."
           sudo cp -v flannel/flanneld /usr/local/bin/
           sudo chmod +x /usr/local/bin/flanneld
-          echo "✅ Installation complete!"
-          EOF
+          echo "Installation complete!"
+          INSTALL
 
           chmod +x "$GITHUB_WORKSPACE/k8s-riscv64-binaries/install.sh"
 
-          tar -czf "$GITHUB_WORKSPACE/kubernetes-${{ needs.get-versions.outputs.k8s_tag }}-riscv64-linux.tar.gz" \
+          tar -czf \
+            "$GITHUB_WORKSPACE/kubernetes-${{ needs.get-versions.outputs.k8s_tag }}-riscv64-linux.tar.gz" \
             -C "$GITHUB_WORKSPACE/k8s-riscv64-binaries" .
 
-      - name: Upload RISC-V artifacts
+      - name: Upload RISC-V artifact
         uses: actions/upload-artifact@v4
         with:
           name: kubernetes-${{ needs.get-versions.outputs.k8s_tag }}-riscv64-linux
           path: ${{ github.workspace }}/kubernetes-${{ needs.get-versions.outputs.k8s_tag }}-riscv64-linux.tar.gz
+
+      - name: Trigger Pages update
+        if: success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: update-pages
