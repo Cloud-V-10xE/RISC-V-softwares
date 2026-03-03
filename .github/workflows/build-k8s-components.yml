@@ -8,20 +8,13 @@ on:
         required: false
         default: 'latest'
   schedule:
-    # Run monthly on the 10th at midnight
-    - cron: "0 0 10 * *"
-  push:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/build-k8s-components.yml'
+    - cron: "0 0 1 * *"
 
 env:
   REGISTRY: docker.io
   DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_USERNAME }}
 
 jobs:
-  # Get versions to build
   get-versions:
     runs-on: ubuntu-latest
     outputs:
@@ -41,15 +34,14 @@ jobs:
           else
             K8S_VERSION="${{ github.event.inputs.k8s_version }}"
           fi
-          
+
           K8S_TAG="${K8S_VERSION#v}"
-          
+
           echo "k8s_version=$K8S_VERSION" >> "$GITHUB_OUTPUT"
           echo "k8s_tag=$K8S_TAG" >> "$GITHUB_OUTPUT"
-          
+
           echo "Building Kubernetes components: $K8S_VERSION"
 
-  # Build components for x86
   build-components-x86:
     needs: get-versions
     runs-on: ubuntu-latest
@@ -71,66 +63,52 @@ jobs:
 
       - name: Clone Kubernetes repository
         run: |
-          git clone --depth=1 --branch ${{ needs.get-versions.outputs.k8s_version }} https://github.com/kubernetes/kubernetes.git
+          rm -rf kubernetes
+          git clone --depth=1 \
+            --branch "${{ needs.get-versions.outputs.k8s_version }}" \
+            https://github.com/kubernetes/kubernetes.git
 
       - name: Build ${{ matrix.component }} for x86_64
         run: |
           cd kubernetes
-          
-          # Build the component
           make WHAT=cmd/${{ matrix.component }}
-          
-          # Create Dockerfile
+
           mkdir -p /tmp/${{ matrix.component }}-build
-          
-          # Use different Dockerfile for kube-proxy vs other components
+
           if [ "${{ matrix.component }}" = "kube-proxy" ]; then
             cat > /tmp/${{ matrix.component }}-build/Dockerfile << 'EOF'
           FROM debian:trixie-slim
-          
           RUN apt-get update && \
               apt-get install -y \
-                ca-certificates \
-                iptables \
-                iproute2 \
-                conntrack \
-                ipset && \
+                ca-certificates iptables iproute2 conntrack ipset && \
               rm -rf /var/lib/apt/lists/*
-          
           COPY ${{ matrix.component }} /usr/local/bin/${{ matrix.component }}
           RUN chmod +x /usr/local/bin/${{ matrix.component }}
-          
           ENTRYPOINT ["/usr/local/bin/${{ matrix.component }}"]
           EOF
           else
             cat > /tmp/${{ matrix.component }}-build/Dockerfile << 'EOF'
           FROM debian:trixie-slim
-          
           RUN apt-get update && \
               apt-get install -y ca-certificates && \
               rm -rf /var/lib/apt/lists/*
-          
           COPY ${{ matrix.component }} /usr/local/bin/${{ matrix.component }}
           RUN chmod +x /usr/local/bin/${{ matrix.component }}
-          
           ENTRYPOINT ["/usr/local/bin/${{ matrix.component }}"]
           EOF
           fi
-          
-          # Copy binary
-          cp _output/bin/${{ matrix.component }} /tmp/${{ matrix.component }}-build/
-          
-          # Build and push
+
+          cp "_output/bin/${{ matrix.component }}" /tmp/${{ matrix.component }}-build/
+
           cd /tmp/${{ matrix.component }}-build
           docker build \
-            --tag ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-amd64 \
-            --tag ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-amd64 \
+            --tag "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-amd64" \
+            --tag "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-amd64" \
             .
-          
-          docker push ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-amd64
-          docker push ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-amd64
 
-  # Build components for RISC-V
+          docker push "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-amd64"
+          docker push "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-amd64"
+
   build-components-riscv:
     needs: get-versions
     runs-on: RISCV64
@@ -149,75 +127,60 @@ jobs:
         run: |
           sudo apt update && sudo apt install -y golang
 
+      - name: Clean workspace with elevated permissions
+        run: |
+          sudo rm -rf "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE"
+
       - name: Clone Kubernetes repository
         run: |
-          if [ -d "kubernetes" ]; then
-            cd kubernetes
-            go clean -modcache 2>/dev/null || true  # Clean Go cache properly
-            cd ..
-            chmod -R u+w kubernetes
-            rm -rf kubernetes
-          fi
-          git clone --depth=1 --branch ${{ needs.get-versions.outputs.k8s_version }} https://github.com/kubernetes/kubernetes.git
+          git clone --depth=1 \
+            --branch "${{ needs.get-versions.outputs.k8s_version }}" \
+            https://github.com/kubernetes/kubernetes.git \
+            "$GITHUB_WORKSPACE/kubernetes"
 
       - name: Build ${{ matrix.component }} for RISC-V
         run: |
-          cd kubernetes
-          
-          # Build the component for RISC-V
+          cd "$GITHUB_WORKSPACE/kubernetes"
           KUBE_BUILD_PLATFORMS=linux/riscv64 make WHAT=cmd/${{ matrix.component }}
-          
-          # Create Dockerfile
+
           mkdir -p /tmp/${{ matrix.component }}-build
-          
-          # Use different Dockerfile for kube-proxy vs other components
+
           if [ "${{ matrix.component }}" = "kube-proxy" ]; then
             cat > /tmp/${{ matrix.component }}-build/Dockerfile << 'EOF'
           FROM riscv64/debian:trixie-slim
-          
           RUN apt-get update && \
               apt-get install -y \
-                ca-certificates \
-                iptables \
-                iproute2 \
-                conntrack \
-                ipset && \
+                ca-certificates iptables iproute2 conntrack ipset && \
               rm -rf /var/lib/apt/lists/*
-          
           COPY ${{ matrix.component }} /usr/local/bin/${{ matrix.component }}
           RUN chmod +x /usr/local/bin/${{ matrix.component }}
-          
           ENTRYPOINT ["/usr/local/bin/${{ matrix.component }}"]
           EOF
           else
             cat > /tmp/${{ matrix.component }}-build/Dockerfile << 'EOF'
           FROM riscv64/debian:trixie-slim
-          
           RUN apt-get update && \
               apt-get install -y ca-certificates && \
               rm -rf /var/lib/apt/lists/*
-          
           COPY ${{ matrix.component }} /usr/local/bin/${{ matrix.component }}
           RUN chmod +x /usr/local/bin/${{ matrix.component }}
-          
           ENTRYPOINT ["/usr/local/bin/${{ matrix.component }}"]
           EOF
           fi
-          
-          # Copy binary
-          cp _output/local/go/bin/${{ matrix.component }} /tmp/${{ matrix.component }}-build/
-          
-          # Build and push
+
+          cp "$GITHUB_WORKSPACE/kubernetes/_output/local/go/bin/${{ matrix.component }}" \
+            /tmp/${{ matrix.component }}-build/
+
           cd /tmp/${{ matrix.component }}-build
           docker build \
-            --tag ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-riscv64 \
-            --tag ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-riscv64 \
+            --tag "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-riscv64" \
+            --tag "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-riscv64" \
             .
-          
-          docker push ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-riscv64
-          docker push ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-riscv64
 
-  # Create multi-arch manifests
+          docker push "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-riscv64"
+          docker push "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-riscv64"
+
   create-manifests:
     needs: [get-versions, build-components-x86, build-components-riscv]
     runs-on: ubuntu-latest
@@ -236,59 +199,25 @@ jobs:
 
       - name: Create ${{ matrix.component }} multi-arch manifest
         run: |
-          # Remove existing manifests if they exist
-          docker manifest rm ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }} 2>/dev/null || true
-          docker manifest rm ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest 2>/dev/null || true
-          
-          # Create versioned manifest
-          docker manifest create ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }} \
-            ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-amd64 \
-            ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-riscv64
-          
-          docker manifest push ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}
-          
-          # Create latest manifest
-          docker manifest create ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest \
-            ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-amd64 \
-            ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-riscv64
-          
-          docker manifest push ${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest
+          docker manifest rm \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}" \
+            2>/dev/null || true
+          docker manifest rm \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest" \
+            2>/dev/null || true
 
-  # Create GitHub Release
-  create-release:
-    needs: [get-versions, create-manifests]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+          docker manifest create \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}" \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-amd64" \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}-riscv64"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: k8s-components-${{ needs.get-versions.outputs.k8s_version }}
-          name: Kubernetes Components ${{ needs.get-versions.outputs.k8s_version }} for RISC-V
-          body: |
-            # Kubernetes Components ${{ needs.get-versions.outputs.k8s_version }} - RISC-V Support
-            
-            Multi-architecture Kubernetes component images for mixed x86/RISC-V clusters.
-            
-            ## 🐧 Images Available
-            
-            All images support both `linux/amd64` and `linux/riscv64`:
-            
-            - `${{ env.DOCKERHUB_REPO }}/kube-apiserver:${{ needs.get-versions.outputs.k8s_tag }}`
-            - `${{ env.DOCKERHUB_REPO }}/kube-controller-manager:${{ needs.get-versions.outputs.k8s_tag }}`
-            - `${{ env.DOCKERHUB_REPO }}/kube-scheduler:${{ needs.get-versions.outputs.k8s_tag }}`
-            - `${{ env.DOCKERHUB_REPO }}/kube-proxy:${{ needs.get-versions.outputs.k8s_tag }}`
-            
-            ## 🚀 Usage
-            
-            These images are automatically pulled when running the control-plane setup script.
-            
-            ## 🔗 Links
-            
-            - [Kubernetes Documentation](https://kubernetes.io/docs/)
-          draft: false
-          prerelease: false
+          docker manifest push \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:${{ needs.get-versions.outputs.k8s_tag }}"
+
+          docker manifest create \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest" \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-amd64" \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest-riscv64"
+
+          docker manifest push \
+            "${{ env.DOCKERHUB_REPO }}/${{ matrix.component }}:latest"
