@@ -96,6 +96,9 @@ jobs:
 
           ALL_PKGS=(gcc coreutils binutils strace nodejs openjdk dotnet-sdk pytorch transformers onnxruntime tensorflow bazelisk kubernetes)
 
+          # Base path for GitHub Pages — repo name as subpath
+          BASE="/RISC-V-softwares"
+
           # ─────────────────────────────────────────────
           # CSS shared across all pages
           # ─────────────────────────────────────────────
@@ -171,7 +174,7 @@ jobs:
             echo "<title>${title} — Cloud-V RISC-V Packages</title>"
             echo "<style>${CSS}</style></head><body>"
             echo "<header class='site-header'><div class='header-inner'>"
-            echo "<div class='site-logo'>Cloud-V <span>/</span> RISC-V Packages</div>"
+            echo "<a class='site-logo' href='${BASE}/' style='color:inherit;text-decoration:none;'>Cloud-V <span>/</span> RISC-V Packages</a>"
             echo "<div class='header-sub'>Prebuilt binaries for RISC-V 64-bit Linux</div>"
             echo "</div></header>"
           }
@@ -204,7 +207,7 @@ jobs:
           {
             page_head "Package Index"
             echo "<div class='container'>"
-            echo "<div class='breadcrumb'><a href='/'>cloud-v-10xe.github.io/cloudv-repos</a></div>"
+            echo "<div class='breadcrumb'><a href='${BASE}/'>cloud-v-10xe.github.io/RISC-V-softwares</a></div>"
             echo "<h1>RISC-V Package Archive</h1>"
             echo "<p class='page-desc'>Prebuilt binaries for RISC-V 64-bit Linux (riscv64). All packages are built from upstream sources on native RISC-V hardware.</p>"
             echo "<div class='updated'>Last updated: $(date -u '+%Y-%m-%d %H:%M UTC')</div>"
@@ -219,7 +222,7 @@ jobs:
                   # Get latest version
                   LATEST=$(jq -r '.[0].tag // "—"' "/tmp/${PKG}_releases.json" 2>/dev/null || echo "—")
                   COUNT=$(jq 'length' "/tmp/${PKG}_releases.json" 2>/dev/null || echo "0")
-                  echo "<a class='pkg-card' href='/${PKG}/' style='display:block;color:inherit;text-decoration:none;'>"
+                  echo "<a class='pkg-card' href='${BASE}/${PKG}/' style='display:block;color:inherit;text-decoration:none;'>"
                   echo "<div class='pkg-card-name'>${PKG_LABEL[$PKG]}</div>"
                   echo "<div class='pkg-card-desc'>${PKG_DESC[$PKG]}</div>"
                   echo "<div class='pkg-card-meta'>"
@@ -255,7 +258,7 @@ jobs:
             {
               page_head "$LABEL"
               echo "<div class='container'>"
-              echo "<div class='breadcrumb'><a href='/'>index</a><span>/</span>${PKG}</div>"
+              echo "<div class='breadcrumb'><a href='${BASE}/'>index</a><span>/</span>${PKG}</div>"
               echo "<h1>${LABEL}</h1>"
               echo "<p class='page-desc'>${DESC}</p>"
 
@@ -275,7 +278,7 @@ jobs:
                   echo "<td><span class='mono'>${TAG}</span></td>"
                   echo "<td><span class='mono'>${DATESTR}</span></td>"
                   echo "<td><span class='badge'>${NASSETS} file(s)</span></td>"
-                  echo "<td><a class='dl-btn' href='/${PKG}/${TAG}/'>view →</a></td>"
+                  echo "<td><a class='dl-btn' href='${BASE}/${PKG}/${TAG}/'>view →</a></td>"
                   echo "</tr>"
                 done
                 echo "</tbody></table>"
@@ -300,7 +303,7 @@ jobs:
               {
                 page_head "${LABEL} ${TAG}"
                 echo "<div class='container'>"
-                echo "<div class='breadcrumb'><a href='/'>index</a><span>/</span><a href='/${PKG}/'>${PKG}</a><span>/</span>${TAG}</div>"
+                echo "<div class='breadcrumb'><a href='${BASE}/'>index</a><span>/</span><a href='${BASE}/${PKG}/'>${PKG}</a><span>/</span>${TAG}</div>"
                 echo "<h1>${LABEL} <span style='font-weight:300;color:var(--text-muted)'>${TAG}</span></h1>"
                 echo "<p class='page-desc'>Released ${DATE} · <a href='${RURL}'>View GitHub Release</a></p>"
 
