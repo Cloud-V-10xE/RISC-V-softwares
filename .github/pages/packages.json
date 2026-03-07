@@ -4,85 +4,121 @@
       "id": "gcc",
       "label": "GCC",
       "category": "Compilers & Toolchains",
-      "description": "GNU Compiler Collection — C, C++, Fortran and more"
+      "description": "GNU Compiler Collection — C, C++, Fortran and more",
+      "central_release": true,
+      "workflow": "build-gcc.yml"
     },
     {
       "id": "coreutils",
       "label": "Coreutils",
       "category": "Compilers & Toolchains",
-      "description": "GNU core utilities — ls, cp, mv, cat and friends"
+      "description": "GNU core utilities — ls, cp, mv, cat and friends",
+      "central_release": true,
+      "workflow": "build-coreutils.yml"
     },
     {
       "id": "binutils",
       "label": "Binutils",
       "category": "Compilers & Toolchains",
-      "description": "GNU binary utilities — as, ld, objdump and more"
+      "description": "GNU binary utilities — as, ld, objdump and more",
+      "central_release": true,
+      "workflow": "build-binutils.yml"
     },
     {
       "id": "strace",
       "label": "strace",
       "category": "Compilers & Toolchains",
-      "description": "System call tracer for Linux"
+      "description": "System call tracer for Linux",
+      "central_release": true,
+      "workflow": "build-strace.yml"
     },
     {
       "id": "nodejs",
       "label": "Node.js",
       "category": "Runtimes",
-      "description": "JavaScript runtime built on V8"
+      "description": "JavaScript runtime built on V8",
+      "central_release": true,
+      "workflow": "build-nodejs.yml"
     },
     {
       "id": "openjdk",
       "label": "OpenJDK",
       "category": "Runtimes",
-      "description": "Open-source Java Development Kit"
+      "description": "Open-source Java Development Kit",
+      "central_release": true,
+      "workflow": "build-openjdk.yml"
     },
     {
       "id": "dotnet-sdk",
       "label": ".NET SDK",
       "category": "Runtimes",
-      "description": ".NET SDK — build, run and publish .NET apps"
+      "description": ".NET SDK — build, run and publish .NET apps",
+      "central_release": true,
+      "workflow": "build-dotnet.yml"
     },
     {
       "id": "pytorch",
       "label": "PyTorch",
       "category": "ML Frameworks",
-      "description": "Machine learning framework by Meta"
+      "description": "Machine learning framework by Meta",
+      "central_release": true,
+      "workflow": "build-pytorch.yml"
     },
     {
       "id": "transformers",
       "label": "Transformers",
       "category": "ML Frameworks",
-      "description": "Hugging Face Transformers library"
+      "description": "Hugging Face Transformers library",
+      "central_release": true,
+      "workflow": "build-transformers.yml"
     },
     {
       "id": "onnxruntime",
       "label": "ONNX Runtime",
       "category": "ML Frameworks",
-      "description": "Cross-platform ML inference engine by Microsoft"
+      "description": "Cross-platform ML inference engine by Microsoft",
+      "central_release": true,
+      "workflow": "build-onnxruntime.yml"
     },
     {
       "id": "tensorflow",
       "label": "TensorFlow",
       "category": "ML Frameworks",
-      "description": "Machine learning platform by Google"
+      "description": "Machine learning platform by Google",
+      "central_release": true,
+      "workflow": "build-tensorflow.yml"
     },
     {
       "id": "bazelisk",
       "label": "Bazelisk",
       "category": "Build Tools",
-      "description": "User-friendly launcher for Bazel"
+      "description": "User-friendly launcher for Bazel",
+      "central_release": true,
+      "workflow": "build-bazelisk.yml"
     },
     {
       "id": "kubernetes",
       "label": "Kubernetes",
       "category": "Infrastructure",
-      "description": "Container orchestration system"
+      "description": "Container orchestration system",
+      "central_release": true,
+      "workflow": "build-kubernetes.yml"
     },
     {
-      "id": "cmake",
-      "label": "CMake",
-      "category": "Build Tools",
-      "description": "Cross-platform build system generator"
+      "id": "flannel",
+      "label": "Flannel",
+      "category": "Infrastructure",
+      "description": "Network fabric for containers — Docker images only",
+      "central_release": false,
+      "workflow": "build-flannel-riscv.yml"
+    },
+    {
+      "id": "etcd",
+      "label": "etcd",
+      "category": "Infrastructure",
+      "description": "Distributed key-value store for Kubernetes",
+      "central_release": false,
+      "workflow": "build-etcd.yml"
     }
   ]
 }
