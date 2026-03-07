@@ -119,6 +119,12 @@
       "description": "Distributed key-value store for Kubernetes",
       "central_release": false,
       "workflow": "build-etcd.yml"
+    },
+    {
+      "id": "cmake",
+      "label": "CMake",
+      "category": "Build Tools",
+      "description": "Cross-platform build system generator"
     }
   ]
 }
