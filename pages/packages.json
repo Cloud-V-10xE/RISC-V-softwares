@@ -1,0 +1,82 @@
+{
+  "packages": [
+    {
+      "id": "gcc",
+      "label": "GCC",
+      "category": "Compilers & Toolchains",
+      "description": "GNU Compiler Collection — C, C++, Fortran and more"
+    },
+    {
+      "id": "coreutils",
+      "label": "Coreutils",
+      "category": "Compilers & Toolchains",
+      "description": "GNU core utilities — ls, cp, mv, cat and friends"
+    },
+    {
+      "id": "binutils",
+      "label": "Binutils",
+      "category": "Compilers & Toolchains",
+      "description": "GNU binary utilities — as, ld, objdump and more"
+    },
+    {
+      "id": "strace",
+      "label": "strace",
+      "category": "Compilers & Toolchains",
+      "description": "System call tracer for Linux"
+    },
+    {
+      "id": "nodejs",
+      "label": "Node.js",
+      "category": "Runtimes",
+      "description": "JavaScript runtime built on V8"
+    },
+    {
+      "id": "openjdk",
+      "label": "OpenJDK",
+      "category": "Runtimes",
+      "description": "Open-source Java Development Kit"
+    },
+    {
+      "id": "dotnet-sdk",
+      "label": ".NET SDK",
+      "category": "Runtimes",
+      "description": ".NET SDK — build, run and publish .NET apps"
+    },
+    {
+      "id": "pytorch",
+      "label": "PyTorch",
+      "category": "ML Frameworks",
+      "description": "Machine learning framework by Meta"
+    },
+    {
+      "id": "transformers",
+      "label": "Transformers",
+      "category": "ML Frameworks",
+      "description": "Hugging Face Transformers library"
+    },
+    {
+      "id": "onnxruntime",
+      "label": "ONNX Runtime",
+      "category": "ML Frameworks",
+      "description": "Cross-platform ML inference engine by Microsoft"
+    },
+    {
+      "id": "tensorflow",
+      "label": "TensorFlow",
+      "category": "ML Frameworks",
+      "description": "Machine learning platform by Google"
+    },
+    {
+      "id": "bazelisk",
+      "label": "Bazelisk",
+      "category": "Build Tools",
+      "description": "User-friendly launcher for Bazel"
+    },
+    {
+      "id": "kubernetes",
+      "label": "Kubernetes",
+      "category": "Infrastructure",
+      "description": "Container orchestration system"
+    }
+  ]
+}
