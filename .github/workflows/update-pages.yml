@@ -38,6 +38,7 @@ jobs:
       - name: Generate site
         env:
           GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           # ── Load CSS and JS from source files ──
           CSS=$(cat .github/pages/style.css)
@@ -62,16 +63,19 @@ jobs:
           declare -A PKG_LABEL
           declare -A PKG_CATEGORY
           declare -A PKG_DESC
+          declare -A PKG_WORKFLOW
           declare -a ALL_PKGS
 
           while IFS= read -r line; do
-            ID=$(echo "$line"    | jq -r '.id')
-            LABEL=$(echo "$line" | jq -r '.label')
-            CAT=$(echo "$line"   | jq -r '.category')
-            DESC=$(echo "$line"  | jq -r '.description')
+            ID=$(echo "$line"       | jq -r '.id')
+            LABEL=$(echo "$line"    | jq -r '.label')
+            CAT=$(echo "$line"      | jq -r '.category')
+            DESC=$(echo "$line"     | jq -r '.description')
+            WF=$(echo "$line"       | jq -r '.workflow // ""')
             PKG_LABEL["$ID"]="$LABEL"
             PKG_CATEGORY["$ID"]="$CAT"
             PKG_DESC["$ID"]="$DESC"
+            PKG_WORKFLOW["$ID"]="$WF"
             ALL_PKGS+=("$ID")
           done < <(jq -c '.packages[]' "$PKGS_JSON")
 
@@ -117,6 +121,22 @@ jobs:
 
             COUNT=$(jq 'length' "/tmp/${PKG}_releases.json")
             echo "  ${PKG}: ${COUNT} release(s) found"
+          done
+
+          # ──────────────────────────────────────────────────────────
+          # Fetch workflow run history per package (for build log links)
+          # We fetch the last 50 successful runs for each package's workflow
+          # and store them so the per-version page can find the closest run
+          # to each release date.
+          # ──────────────────────────────────────────────────────────
+          for PKG in "${ALL_PKGS[@]}"; do
+            WF="${PKG_WORKFLOW[$PKG]}"
+            if [ -z "$WF" ]; then
+              echo "[]" > "/tmp/${PKG}_runs.json"
+              continue
+            fi
+            echo "  Fetching runs for ${WF}..."
+            gh api               "repos/$GH_REPO/actions/workflows/${WF}/runs?status=success&per_page=50"               --jq '[.workflow_runs[] | {id: .id, created_at: .created_at, html_url: .html_url}]'               > "/tmp/${PKG}_runs.json" 2>/dev/null || echo "[]" > "/tmp/${PKG}_runs.json"
           done
 
           # ──────────────────────────────────────────────────────────
@@ -289,14 +309,30 @@ jobs:
             } > "_site/${PKG}/index.html"
 
             # ──────────────────────────────────────────────────────
+            # ──────────────────────────────────────────────────────
             # PER-VERSION PAGE  e.g. /gcc/v14.2.0/
             # ──────────────────────────────────────────────────────
             jq -c '.[]' "$RELEASES_FILE" | while read -r RELEASE; do
-              TAG=$(echo "$RELEASE"  | jq -r '.tag')
-              DATE=$(echo "$RELEASE" | jq -r '.date' | cut -c1-10)
-              RURL=$(echo "$RELEASE" | jq -r '.url')
+              TAG=$(echo "$RELEASE"   | jq -r '.tag')
+              DATE=$(echo "$RELEASE"  | jq -r '.date' | cut -c1-10)
+              RDATE=$(echo "$RELEASE" | jq -r '.date')
+              RURL=$(echo "$RELEASE"  | jq -r '.url')
 
               mkdir -p "_site/${PKG}/${TAG}"
+
+              # ── Find closest successful workflow run to this release date ──
+              # Converts both timestamps to epoch and picks the run with
+              # the smallest absolute time difference.
+              RUNS_FILE="/tmp/${PKG}_runs.json"
+              LOG_URL=""
+              if [ -s "$RUNS_FILE" ] && [ "$(jq 'length' "$RUNS_FILE")" -gt 0 ]; then
+                RDATE_EPOCH=$(date -d "$RDATE" +%s 2>/dev/null || echo "0")
+                LOG_URL=$(jq -r --argjson epoch "$RDATE_EPOCH" '
+                  map(. + {diff: ((.created_at | fromdateiso8601) - $epoch | fabs)})
+                  | sort_by(.diff)
+                  | .[0].html_url // ""
+                ' "$RUNS_FILE")
+              fi
 
               {
                 page_head "${LABEL} ${TAG}" "false"
@@ -310,13 +346,16 @@ jobs:
             <p class="page-desc">
               Released ${DATE} &middot;
               <a href="${RURL}">View GitHub Release</a>
-            </p>
           HTML
+                if [ -n "$LOG_URL" ] && [ "$LOG_URL" != "null" ]; then
+                  echo "    &middot; <a href='${LOG_URL}'>&#128196; Build Logs</a>"
+                fi
+                echo "    </p>"
 
-                # Downloads table
+                # Downloads table — Filename / Size / Download / Build Log
                 echo "<div class='section-title'>Downloads</div>"
                 echo "<table><thead><tr>"
-                echo "  <th>Filename</th><th>Size</th><th></th>"
+                echo "  <th>Filename</th><th>Size</th><th>Download</th><th>Build Log</th>"
                 echo "</tr></thead><tbody>"
                 echo "$RELEASE" | jq -r '.assets[] | "\(.name)\t\(.size)\t\(.url)"' \
                   | while IFS=$'\t' read -r FNAME FSIZE FURL; do
@@ -327,15 +366,21 @@ jobs:
                     else
                       HSIZE="${FSIZE} B"
                     fi
+                    LOG_CELL="<span style='color:var(--text-faint);font-size:12px;font-family:var(--mono)'>—</span>"
+                    if [ -n "$LOG_URL" ] && [ "$LOG_URL" != "null" ]; then
+                      LOG_CELL="<a class='log-btn' href='${LOG_URL}'>&#128196; log</a>"
+                    fi
                     cat << ROW
           <tr>
             <td><span class="mono">${FNAME}</span></td>
             <td><span class="mono" style="color:var(--text-muted)">${HSIZE}</span></td>
             <td><a class="dl-btn" href="${FURL}">download</a></td>
+            <td>${LOG_CELL}</td>
           </tr>
           ROW
                   done
                 echo "</tbody></table>"
+
 
                 # Installation instructions
                 FIRST_ASSET=$(echo "$RELEASE" | jq -r '.assets[0].name // ""')
