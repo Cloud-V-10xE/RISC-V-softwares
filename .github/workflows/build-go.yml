@@ -2,6 +2,7 @@ name: Build Go for RISC-V
 
 on:
   workflow_dispatch:
+  push:
   schedule:
     - cron: "0 0 1 * *"
 
@@ -19,91 +20,83 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            git \
-            autoconf \
-            automake \
-            wget \
-            make \
-            python3
+         export DEBIAN_FRONTEND=noninteractive
+         sudo apt-get update
+         sudo apt-get install -y \
+           build-essential \
+           golang \
+           git \
+           autoconf \
+           automake \
+           wget \
+           make \
+           python3
 
-      - name: Install Go bootstrap compiler
-        # Go requires the previous major version to bootstrap.
-        # Go 1.25+ requires >= 1.24.6. We install 1.24.6 directly from
-        # Google's official riscv64 release rather than relying on apt.
-        # If a future Go version bumps the minimum, update this version.
-        run: |
-          wget -q https://go.dev/dl/go1.24.6.linux-riscv64.tar.gz
-          sudo tar -C /usr/local -xzf go1.24.6.linux-riscv64.tar.gz
-          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
-
-      - name: Clean workspace with elevated permissions
-        run: |
-          sudo rm -rf "$GITHUB_WORKSPACE"
-          mkdir -p "$GITHUB_WORKSPACE"
 
       - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          clean: false
-
+      
       - name: Check environment
         run: |
           set -eux
           uname -a
           gcc --version
           g++ --version
-          go version
+          ldd --version
 
-      - name: Clone Go and checkout latest tag
+      - name: Clone Go from and checkout latest tag
         id: get-latest-tag
         run: |
           set -eux
+
+          # Tweak Git to be more resilient on CI
           git config --global http.version HTTP/2
-          git config --global http.postBuffer 1048576000
+          git config https.postBuffer 1048576000
+          git config http.postBuffer 1048576000
 
-          rm -rf "$GITHUB_WORKSPACE/go"
-          git clone --depth=1 --no-tags https://go.googlesource.com/go "$GITHUB_WORKSPACE/go"
-          cd "$GITHUB_WORKSPACE/go"
 
+          rm -rf go
+          git clone --depth=1 --no-tags https://go.googlesource.com/go
+          cd go
+
+          # Fetch only tag references (without full history)
           git fetch --tags --depth=1
-          LATEST_TAG=$(git tag -l "go1.*" | grep -v "rc\|beta\|alpha" | sort -V | tail -n 1)
+          git submodule update --recursive --remote
+
+          LATEST_TAG=$(git tag -l "go*" | sort -V | tail -n 1)
           echo "Checking out $LATEST_TAG"
-          git fetch --depth=1 origin tag "$LATEST_TAG"
+
+          # Fetch and checkout just that tag commit (still shallow)
+          git fetch --depth=1 origin tag $LATEST_TAG
           git checkout FETCH_HEAD
 
           echo "tag_name=$LATEST_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Build Go
+      
+      - name: Build
         run: |
-          cd "$GITHUB_WORKSPACE/go/src"
-          # GOROOT_BOOTSTRAP tells the build system where the bootstrap Go is
-          export GOROOT_BOOTSTRAP=/usr/local/go
-          export GOMAXPROCS=$(nproc)
+          cd go/src
+          export GOMAXPROCS=4
           ./all.bash
 
       - name: Verify installation
         run: |
-          "$GITHUB_WORKSPACE/go/bin/go" version
+          ./go/bin/go version
 
       - name: Get Go version and set outputs
         id: get-version
         run: |
-          GO_VERSION=$("$GITHUB_WORKSPACE/go/bin/go" version | awk '{print substr($3,3)}')
-          ASSET_NAME="golang-${GO_VERSION}-riscv64-linux.tar.gz"
+          GO_VERSION=$($GITHUB_WORKSPACE/go/bin/go version | awk '{print substr($3,3)}')
+          ASSET_NAME="go-${GO_VERSION}-riscv64-linux.tar.gz"
           ASSET_PATH="$GITHUB_WORKSPACE/${ASSET_NAME}"
 
-          echo "release_name=Go ${GO_VERSION} RISC-V" >> "$GITHUB_OUTPUT"
-          echo "asset_name=$ASSET_NAME" >> "$GITHUB_OUTPUT"
-          echo "asset_path=$ASSET_PATH" >> "$GITHUB_OUTPUT"
+          echo "release_name=Go ${GO_VERSION} RISC-V" >> $GITHUB_OUTPUT
+          echo "asset_name=$ASSET_NAME" >> $GITHUB_OUTPUT
+          echo "asset_path=$ASSET_PATH" >> $GITHUB_OUTPUT
 
       - name: Package binaries
         run: |
-          tar -czf "${{ steps.get-version.outputs.asset_path }}" \
-            -C "$GITHUB_WORKSPACE" go
+          tar -czf ${{ steps.get-version.outputs.asset_path }} -C ${{ github.workspace }}/go .
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -111,9 +104,17 @@ jobs:
           name: ${{ steps.get-version.outputs.asset_name }}
           path: ${{ steps.get-version.outputs.asset_path }}
 
-      - name: Trigger Pages update
-        if: success()
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          event-type: update-pages
+      - name: Create or push to tag
+        run: |
+          TAG=${{ steps.get-latest-tag.outputs.tag_name }}
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "✅ Tag $TAG already exists. Skipping tag creation." 
+          else
+            echo "🆕 Tag $TAG does not exist. Creating and pushing..."
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
