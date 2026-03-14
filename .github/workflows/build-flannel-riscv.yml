@@ -454,36 +454,35 @@ jobs:
           - flannel-cni-plugin (amd64 + riscv64)
 
           ## Quick Installation
-```bash
-          ./install-flannel.sh
-```
+
+              ./install-flannel.sh
 
           ## Manual Installation
 
           ### Step 1: Configure Pause Container (ALL nodes)
-          Edit `/etc/containerd/config.toml`:
-```toml
-          [plugins."io.containerd.grpc.v1.cri"]
-            sandbox_image = "DOCKERHUB_USER/pause:PAUSE_VERSION"
-```
-          Then: `sudo systemctl restart containerd`
+          Edit /etc/containerd/config.toml and set:
+
+              [plugins."io.containerd.grpc.v1.cri"]
+                sandbox_image = "DOCKERHUB_USER/pause:PAUSE_VERSION"
+
+          Then restart containerd:
+
+              sudo systemctl restart containerd
 
           ### Step 2: Install Flannel
-```bash
-          helm repo add flannel https://flannel-io.github.io/flannel/
-          helm repo update
-          kubectl create namespace kube-flannel
-          kubectl label --overwrite ns kube-flannel pod-security.kubernetes.io/enforce=privileged
-          helm install flannel --namespace kube-flannel \
-            --set podCidr="10.244.0.0/16" \
-            flannel/flannel
-```
+
+              helm repo add flannel https://flannel-io.github.io/flannel/
+              helm repo update
+              kubectl create namespace kube-flannel
+              kubectl label --overwrite ns kube-flannel pod-security.kubernetes.io/enforce=privileged
+              helm install flannel --namespace kube-flannel \
+                --set podCidr="10.244.0.0/16" \
+                flannel/flannel
 
           ### Step 3: Verify
-```bash
-          kubectl get pods -n kube-flannel
-          kubectl get nodes
-```
+
+              kubectl get pods -n kube-flannel
+              kubectl get nodes
           EOFREADME
 
       - name: Upload installation files
