@@ -31,11 +31,13 @@ jobs:
             python3
 
       - name: Install Go bootstrap compiler
-        # apt ships Go 1.22.2 on Ubuntu Noble but Go 1.24+ requires >= 1.22.6
-        # to bootstrap. We download the official 1.22.6 riscv64 binary instead.
+        # Go requires the previous major version to bootstrap.
+        # Go 1.25+ requires >= 1.24.6. We install 1.24.6 directly from
+        # Google's official riscv64 release rather than relying on apt.
+        # If a future Go version bumps the minimum, update this version.
         run: |
-          wget -q https://go.dev/dl/go1.22.6.linux-riscv64.tar.gz
-          sudo tar -C /usr/local -xzf go1.22.6.linux-riscv64.tar.gz
+          wget -q https://go.dev/dl/go1.24.6.linux-riscv64.tar.gz
+          sudo tar -C /usr/local -xzf go1.24.6.linux-riscv64.tar.gz
           echo "/usr/local/go/bin" >> "$GITHUB_PATH"
 
       - name: Clean workspace with elevated permissions
