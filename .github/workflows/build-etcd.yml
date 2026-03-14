@@ -11,8 +11,7 @@ on:
     - cron: "0 0 12 * *"
 
 env:
-  REGISTRY: docker.io
-  DOCKERHUB_REPO: ${{ secrets.DOCKERHUB_USERNAME }}
+  REGISTRY: ghcr.io
 
 jobs:
   get-versions:
@@ -20,6 +19,7 @@ jobs:
     outputs:
       etcd_version: ${{ steps.versions.outputs.etcd_version }}
       etcd_tag: ${{ steps.versions.outputs.etcd_tag }}
+      image_repo: ${{ steps.versions.outputs.image_repo }}
     steps:
       - name: Get latest versions
         id: versions
@@ -32,8 +32,12 @@ jobs:
 
           ETCD_TAG="${ETCD_VERSION#v}"
 
+          # Lowercase the repo owner — GHCR requires all image names to be lowercase
+          IMAGE_REPO="ghcr.io/$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+
           echo "etcd_version=$ETCD_VERSION" >> "$GITHUB_OUTPUT"
           echo "etcd_tag=$ETCD_TAG" >> "$GITHUB_OUTPUT"
+          echo "image_repo=$IMAGE_REPO" >> "$GITHUB_OUTPUT"
 
           echo "Building etcd: $ETCD_VERSION"
 
@@ -47,11 +51,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Log in to DockerHub
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Clone etcd repository
         run: |
@@ -86,12 +91,12 @@ jobs:
 
           cd /tmp/etcd-build
           docker build \
-            --tag "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-amd64" \
-            --tag "${{ env.DOCKERHUB_REPO }}/etcd:latest-amd64" \
+            --tag "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-amd64" \
+            --tag "${{ needs.get-versions.outputs.image_repo }}/etcd:latest-amd64" \
             .
 
-          docker push "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-amd64"
-          docker push "${{ env.DOCKERHUB_REPO }}/etcd:latest-amd64"
+          docker push "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-amd64"
+          docker push "${{ needs.get-versions.outputs.image_repo }}/etcd:latest-amd64"
 
   build-etcd-riscv:
     needs: get-versions
@@ -100,9 +105,10 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Log in to DockerHub
+      - name: Log in to GHCR
         run: |
-          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io \
+            -u "${{ github.actor }}" --password-stdin
 
       - name: Setup Go
         run: |
@@ -147,12 +153,12 @@ jobs:
 
           cd /tmp/etcd-build
           docker build \
-            --tag "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-riscv64" \
-            --tag "${{ env.DOCKERHUB_REPO }}/etcd:latest-riscv64" \
+            --tag "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-riscv64" \
+            --tag "${{ needs.get-versions.outputs.image_repo }}/etcd:latest-riscv64" \
             .
 
-          docker push "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-riscv64"
-          docker push "${{ env.DOCKERHUB_REPO }}/etcd:latest-riscv64"
+          docker push "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-riscv64"
+          docker push "${{ needs.get-versions.outputs.image_repo }}/etcd:latest-riscv64"
 
   create-manifests:
     needs: [get-versions, build-etcd-x86, build-etcd-riscv]
@@ -161,33 +167,34 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Log in to DockerHub
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create etcd multi-arch manifest
         run: |
           docker manifest rm \
-            "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}" \
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}" \
             2>/dev/null || true
           docker manifest rm \
-            "${{ env.DOCKERHUB_REPO }}/etcd:latest" \
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:latest" \
             2>/dev/null || true
 
           docker manifest create \
-            "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}" \
-            "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-amd64" \
-            "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-riscv64"
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}" \
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-amd64" \
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}-riscv64"
 
           docker manifest push \
-            "${{ env.DOCKERHUB_REPO }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}"
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:${{ needs.get-versions.outputs.etcd_tag }}"
 
           docker manifest create \
-            "${{ env.DOCKERHUB_REPO }}/etcd:latest" \
-            "${{ env.DOCKERHUB_REPO }}/etcd:latest-amd64" \
-            "${{ env.DOCKERHUB_REPO }}/etcd:latest-riscv64"
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:latest" \
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:latest-amd64" \
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:latest-riscv64"
 
           docker manifest push \
-            "${{ env.DOCKERHUB_REPO }}/etcd:latest"
+            "${{ needs.get-versions.outputs.image_repo }}/etcd:latest"
