@@ -40,8 +40,9 @@ jobs:
             zlib1g-dev libunwind-dev \
             build-essential gettext locales
 
-          curl -fsSL https://deb.nodesource.com/setup_18.x | sudo bash -
-          sudo apt-get install -y nodejs
+          # NodeSource does not support riscv64 — use Ubuntu repos instead
+          # Ubuntu Noble ships nodejs 18.x natively for riscv64
+          sudo apt-get install -y nodejs npm
 
       - name: Clone repositories
         run: |
