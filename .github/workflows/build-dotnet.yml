@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04-riscv
+    runs-on: [ubuntu-24.04-riscv, RISCV64]
     env:
       PACKAGESDIR: ${{ github.workspace }}/packages
       DOWNLOADDIR: ${{ github.workspace }}/downloads
