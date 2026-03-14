@@ -46,7 +46,7 @@
       "category": "Runtimes",
       "description": "Open-source Java Development Kit",
       "central_release": true,
-      "workflow": "build-openjdk.yml"
+      "workflow": "build-jdk.yml"
     },
     {
       "id": "dotnet-sdk",
@@ -78,7 +78,7 @@
       "category": "ML Frameworks",
       "description": "Cross-platform ML inference engine by Microsoft",
       "central_release": true,
-      "workflow": "build-onnxruntime.yml"
+      "workflow": "build-onnx.yml"
     },
     {
       "id": "tensorflow",
@@ -102,7 +102,7 @@
       "category": "Infrastructure",
       "description": "Container orchestration system",
       "central_release": true,
-      "workflow": "build-kubernetes.yml"
+      "workflow": "build-kubernetes.yaml"
     },
     {
       "id": "flannel",
