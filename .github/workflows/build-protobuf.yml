@@ -50,9 +50,15 @@ jobs:
         run: |
           git clone --depth=1 \
             --branch "${{ steps.get-version.outputs.tag }}" \
-            --recurse-submodules \
             https://github.com/protocolbuffers/protobuf.git \
             "$GITHUB_WORKSPACE/protobuf-src"
+          cd "$GITHUB_WORKSPACE/protobuf-src"
+          # Must explicitly init abseil submodule — protobuf bundles its own
+          # version which is newer than what apt ships on Ubuntu Noble
+          git submodule update --init --depth=1 \
+            third_party/abseil-cpp \
+            third_party/jsoncpp \
+            third_party/utf8_range
 
       - name: Build Protobuf
         run: |
@@ -60,9 +66,9 @@ jobs:
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/protobuf-install" \
-            -Dprotobuf_BUILD_TESTS=OFF \
-            -Dprotobuf_ABSL_PROVIDER=module \
             -DCMAKE_CXX_STANDARD=17 \
+            -DABSL_PROPAGATE_CXX_STD=ON \
+            -Dprotobuf_BUILD_TESTS=OFF \
             -G Ninja
           cmake --build build --parallel $(nproc)
           cmake --install build
