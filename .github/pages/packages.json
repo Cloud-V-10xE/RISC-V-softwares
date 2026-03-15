@@ -133,6 +133,27 @@
       "description": "Go programming language runtime and toolchain — official releases do not include riscv64 binaries",
       "central_release": true,
       "workflow": "build-go.yml"
+    },
+    { 
+      "id": "ninja",
+      "label": "Ninja",
+      "category": "Build Tools",
+      "description": "Small fast build system used by LLVM, CMake and Chrome — no prebuilt riscv64 binary",
+      "central_release": true, "workflow": "build-ninja.yml"  
+    },
+    { "id": "sqlite",
+      "label": "SQLite",
+      "category": "Runtimes",
+      "description": "Lightweight embedded SQL database engine — latest versions not prebuilt for riscv64",
+      "central_release": true,
+      "workflow": "build-sqlite.yml"
+    },
+    { 
+      "id": "helm",
+      "label": "Helm",
+      "category": "Infrastructure",
+      "description": "Kubernetes package manager — no official riscv64 binary from upstream",           
+      "central_release": true, "workflow": "build-helm.yml"   
     }
   ]
 }
