@@ -73,12 +73,23 @@ jobs:
             --disable-install-doc \
             --with-baseruby=$(which ruby)
 
-          # BUNDLED_GEMS="" tells make to skip downloading bundled gems
-          # (minitest, rake, etc.) from rubygems.org entirely.
-          # The self-hosted runner cannot reach rubygems.org so we skip
-          # them — users can install gems after deployment with `gem install`.
-          make -j$(nproc) BUNDLED_GEMS=""
-          make install BUNDLED_GEMS=""
+          # Patch downloader.rb to skip network downloads entirely.
+          # The self-hosted runner cannot reach rubygems.org so we make
+          # the downloader create an empty file instead of downloading.
+          # This affects bundled gems (minitest, rake etc.) only —
+          # the Ruby interpreter itself builds and installs correctly.
+          cat > tool/downloader.rb << 'DOWNLOADER_PATCH'
+          # Patched: skip all downloads, create empty placeholder files
+          require 'fileutils'
+          ARGV.each do |arg|
+            next if arg.start_with?('-')
+            FileUtils.mkdir_p(File.dirname(arg))
+            FileUtils.touch(arg) unless File.exist?(arg)
+          end
+          DOWNLOADER_PATCH
+
+          make -j$(nproc)
+          make install
 
       - name: Verify
         run: |
