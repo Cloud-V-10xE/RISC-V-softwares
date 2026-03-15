@@ -39,12 +39,20 @@ jobs:
       - name: Get latest Protobuf version
         id: get-version
         run: |
-          LATEST=$(curl -s https://api.github.com/repos/protocolbuffers/protobuf/releases/latest \
-            | jq -r '.tag_name')
+          # Protobuf v27+ removed abseil as a submodule and switched to
+          # CMake FetchContent which requires network at configure time.
+          # The self-hosted runner blocks outbound CMake downloads so we
+          # pin to the latest v26.x which still bundles abseil as a submodule.
+          LATEST=$(curl -s "https://api.github.com/repos/protocolbuffers/protobuf/releases?per_page=100" \
+            | jq -r '[.[] | select(.prerelease == false) | select(.tag_name | startswith("v26."))] | .[0].tag_name')
+          if [ -z "$LATEST" ] || [ "$LATEST" = "null" ]; then
+            LATEST=$(curl -s "https://api.github.com/repos/protocolbuffers/protobuf/releases?per_page=100" \
+              | jq -r '[.[] | select(.prerelease == false) | select(.tag_name | startswith("v25."))] | .[0].tag_name')
+          fi
           VERSION="${LATEST#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
-          echo "Latest Protobuf: $LATEST"
+          echo "Building Protobuf: $LATEST"
 
       - name: Clone Protobuf
         run: |
