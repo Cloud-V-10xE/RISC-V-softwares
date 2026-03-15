@@ -96,7 +96,7 @@ The short version:
 
 The workflow files, tooling, and documentation in this repository are licensed under the [MIT License](LICENSE).
 
-Each prebuilt binary retains its own upstream license. See [NOTICES.md](NOTICES.md) for the full list.
+Each prebuilt binary retains its own upstream license.
 
 ---
 
