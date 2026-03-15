@@ -73,39 +73,32 @@ jobs:
             --disable-install-doc \
             --with-baseruby=$(which ruby)
 
-          # The Makefile calls tool/downloader.rb to fetch bundled gems
-          # from rubygems.org which is unreachable on the self-hosted runner.
-          # The call pattern is:
-          #   ruby tool/downloader.rb -d gems --no-src minitest-5.25.4
-          # We replace the script with one that creates empty .gem files
-          # matching whatever name is requested, satisfying make's file targets.
-          cat > tool/downloader.rb << 'DOWNLOADER_PATCH'
-#!/usr/bin/env ruby
-# Stub downloader — creates empty placeholder files instead of downloading.
-# Runs on the self-hosted runner where rubygems.org is unreachable.
-require 'fileutils'
-# Parse -d <dir> argument
-dir = '.'
-i = 0
-while i < ARGV.length
-  if ARGV[i] == '-d' && ARGV[i+1]
-    dir = ARGV[i+1]
-    i += 2
-  else
-    i += 1
-  end
-end
-# Create placeholder .gem files for each gem name argument
-ARGV.each do |arg|
-  next if arg.start_with?('-')
-  next if ARGV[ARGV.index(arg) - 1] == '-d' rescue false
-  gem_file = File.join(dir, arg.end_with?('.gem') ? arg : "#{arg}.gem")
-  FileUtils.mkdir_p(File.dirname(gem_file))
-  FileUtils.touch(gem_file)
-  $stderr.puts "Stubbed: #{gem_file}"
-end
-DOWNLOADER_PATCH
-
+          # Replace downloader.rb with a stub that creates empty placeholder
+          # files instead of downloading from rubygems.org (unreachable on
+          # the self-hosted runner). Uses python3 to avoid heredoc-in-heredoc
+          # YAML issues with Ruby's single quotes.
+          python3 -c "
+import os, sys
+lines = [
+  'require \"fileutils\"',
+  'dir = \".\"',
+  'i = 0',
+  'while i < ARGV.length',
+  '  if ARGV[i] == \"-d\" && ARGV[i+1]',
+  '    dir = ARGV[i+1]; i += 2',
+  '  else',
+  '    i += 1',
+  '  end',
+  'end',
+  'ARGV.each do |arg|',
+  '  next if arg.start_with?(\"-\")',
+  '  gem_file = File.join(dir, arg.end_with?(\".gem\") ? arg : \"#{arg}.gem\")',
+  '  FileUtils.mkdir_p(File.dirname(gem_file))',
+  '  FileUtils.touch(gem_file)',
+  'end',
+]
+open('tool/downloader.rb', 'w').write(chr(10).join(lines))
+"
           mkdir -p gems
           make -j$(nproc)
           make install
@@ -134,4 +127,3 @@ DOWNLOADER_PATCH
         with:
           name: ${{ steps.set-outputs.outputs.asset_name }}
           path: ${{ steps.set-outputs.outputs.asset_path }}
-
