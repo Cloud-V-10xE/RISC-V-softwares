@@ -73,21 +73,40 @@ jobs:
             --disable-install-doc \
             --with-baseruby=$(which ruby)
 
-          # Patch downloader.rb to skip network downloads entirely.
-          # The self-hosted runner cannot reach rubygems.org so we make
-          # the downloader create an empty file instead of downloading.
-          # This affects bundled gems (minitest, rake etc.) only —
-          # the Ruby interpreter itself builds and installs correctly.
+          # The Makefile calls tool/downloader.rb to fetch bundled gems
+          # from rubygems.org which is unreachable on the self-hosted runner.
+          # The call pattern is:
+          #   ruby tool/downloader.rb -d gems --no-src minitest-5.25.4
+          # We replace the script with one that creates empty .gem files
+          # matching whatever name is requested, satisfying make's file targets.
           cat > tool/downloader.rb << 'DOWNLOADER_PATCH'
-          # Patched: skip all downloads, create empty placeholder files
-          require 'fileutils'
-          ARGV.each do |arg|
-            next if arg.start_with?('-')
-            FileUtils.mkdir_p(File.dirname(arg))
-            FileUtils.touch(arg) unless File.exist?(arg)
-          end
-          DOWNLOADER_PATCH
+#!/usr/bin/env ruby
+# Stub downloader — creates empty placeholder files instead of downloading.
+# Runs on the self-hosted runner where rubygems.org is unreachable.
+require 'fileutils'
+# Parse -d <dir> argument
+dir = '.'
+i = 0
+while i < ARGV.length
+  if ARGV[i] == '-d' && ARGV[i+1]
+    dir = ARGV[i+1]
+    i += 2
+  else
+    i += 1
+  end
+end
+# Create placeholder .gem files for each gem name argument
+ARGV.each do |arg|
+  next if arg.start_with?('-')
+  next if ARGV[ARGV.index(arg) - 1] == '-d' rescue false
+  gem_file = File.join(dir, arg.end_with?('.gem') ? arg : "#{arg}.gem")
+  FileUtils.mkdir_p(File.dirname(gem_file))
+  FileUtils.touch(gem_file)
+  $stderr.puts "Stubbed: #{gem_file}"
+end
+DOWNLOADER_PATCH
 
+          mkdir -p gems
           make -j$(nproc)
           make install
 
@@ -115,3 +134,4 @@ jobs:
         with:
           name: ${{ steps.set-outputs.outputs.asset_name }}
           path: ${{ steps.set-outputs.outputs.asset_path }}
+
