@@ -57,18 +57,21 @@ jobs:
             https://github.com/grpc/grpc.git \
             "$GITHUB_WORKSPACE/grpc-src"
           cd "$GITHUB_WORKSPACE/grpc-src"
-          # Explicitly initialize key submodules — shallow clone with
-          # --recurse-submodules doesn't always fetch nested submodules
-          # (e.g. third_party/protobuf/third_party/abseil-cpp) correctly.
+          # Initialize top-level submodules only — nested submodule init
+          # (e.g. protobuf's own abseil) must be done separately with cd
           git submodule update --init --depth=1 \
             third_party/abseil-cpp \
             third_party/protobuf \
             third_party/re2 \
             third_party/boringssl-with-bazel \
             third_party/cares/cares
-          # Initialize protobuf's own nested abseil submodule
-          cd third_party/protobuf
-          git submodule update --init --depth=1 third_party/abseil-cpp
+          # Now init protobuf's nested abseil from within its directory
+          cd "$GITHUB_WORKSPACE/grpc-src/third_party/protobuf"
+          git submodule update --init --depth=1 third_party/abseil-cpp \
+            2>/dev/null || true
+          # Also init utf8_range which protobuf needs
+          git submodule update --init --depth=1 third_party/utf8_range \
+            2>/dev/null || true
 
       - name: Build gRPC
         run: |
