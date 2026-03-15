@@ -53,12 +53,10 @@ jobs:
             https://github.com/protocolbuffers/protobuf.git \
             "$GITHUB_WORKSPACE/protobuf-src"
           cd "$GITHUB_WORKSPACE/protobuf-src"
-          # Must explicitly init abseil submodule — protobuf bundles its own
-          # version which is newer than what apt ships on Ubuntu Noble
-          git submodule update --init --depth=1 \
-            third_party/abseil-cpp \
-            third_party/jsoncpp \
-            third_party/utf8_range
+          # Init all submodules recursively — submodule structure varies
+          # between versions so we let git handle it rather than naming
+          # specific paths which may not exist in newer releases
+          git submodule update --init --recursive --depth=1
 
       - name: Build Protobuf
         run: |
