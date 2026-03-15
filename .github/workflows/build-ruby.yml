@@ -1,0 +1,106 @@
+name: Build Ruby for RISC-V
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 7 * *"
+
+jobs:
+  build:
+    runs-on: RISCV64
+    permissions:
+      contents: write
+    outputs:
+      asset_name: ${{ steps.set-outputs.outputs.asset_name }}
+      asset_path: ${{ steps.set-outputs.outputs.asset_path }}
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            wget \
+            jq \
+            libssl-dev \
+            libreadline-dev \
+            zlib1g-dev \
+            libyaml-dev \
+            libgdbm-dev \
+            libncurses5-dev \
+            libffi-dev \
+            autoconf \
+            bison
+
+      - name: Clean workspace with elevated permissions
+        run: |
+          sudo rm -rf "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE"
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Get latest Ruby version
+        id: get-version
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/ruby/ruby/releases \
+            | jq -r '[.[] | select(.prerelease == false)] | .[0].tag_name')
+          # Ruby tags look like v3_4_1 — convert to v3.4.1
+          TAG_DOT=$(echo "$LATEST" | sed 's/_/./g')
+          VERSION="${TAG_DOT#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest Ruby: $VERSION"
+
+      - name: Clone Ruby
+        run: |
+          git clone --depth=1 \
+            --branch "${{ steps.get-version.outputs.tag }}" \
+            https://github.com/ruby/ruby.git \
+            "$GITHUB_WORKSPACE/ruby-src"
+
+      - name: Build Ruby
+        run: |
+          cd "$GITHUB_WORKSPACE/ruby-src"
+          autoreconf -fi
+          ./configure \
+            --prefix="$GITHUB_WORKSPACE/ruby-install" \
+            --enable-shared \
+            --disable-install-doc
+          make -j$(nproc)
+          make install
+
+      - name: Verify
+        run: |
+          "$GITHUB_WORKSPACE/ruby-install/bin/ruby" --version
+          "$GITHUB_WORKSPACE/ruby-install/bin/gem" --version
+
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          ASSET_NAME="ruby-${VERSION}-riscv64-linux.tar.gz"
+          ASSET_PATH="$GITHUB_WORKSPACE/${ASSET_NAME}"
+          echo "asset_name=$ASSET_NAME" >> "$GITHUB_OUTPUT"
+          echo "asset_path=$ASSET_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Package
+        run: |
+          tar -czf "${{ steps.set-outputs.outputs.asset_path }}" \
+            -C "$GITHUB_WORKSPACE/ruby-install" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.set-outputs.outputs.asset_name }}
+          path: ${{ steps.set-outputs.outputs.asset_path }}
+
+      - name: Trigger Pages update
+        if: success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: update-pages

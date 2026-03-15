@@ -1,0 +1,92 @@
+name: Build containerd for RISC-V
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 11 * *"
+
+jobs:
+  build:
+    runs-on: RISCV64
+    permissions:
+      contents: write
+    outputs:
+      asset_name: ${{ steps.set-outputs.outputs.asset_name }}
+      asset_path: ${{ steps.set-outputs.outputs.asset_path }}
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            jq \
+            golang \
+            libseccomp-dev \
+            libbtrfs-dev
+
+      - name: Clean workspace with elevated permissions
+        run: |
+          sudo rm -rf "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE"
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Get latest containerd version
+        id: get-version
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/containerd/containerd/releases/latest \
+            | jq -r '.tag_name')
+          VERSION="${LATEST#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest containerd: $LATEST"
+
+      - name: Clone containerd
+        run: |
+          git clone --depth=1 \
+            --branch "${{ steps.get-version.outputs.tag }}" \
+            https://github.com/containerd/containerd.git \
+            "$GITHUB_WORKSPACE/containerd-src"
+
+      - name: Build containerd
+        run: |
+          cd "$GITHUB_WORKSPACE/containerd-src"
+          make binaries
+          mkdir -p "$GITHUB_WORKSPACE/containerd-install/bin"
+          cp bin/* "$GITHUB_WORKSPACE/containerd-install/bin/"
+
+      - name: Verify
+        run: |
+          "$GITHUB_WORKSPACE/containerd-install/bin/containerd" --version
+
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          ASSET_NAME="containerd-${VERSION}-riscv64-linux.tar.gz"
+          ASSET_PATH="$GITHUB_WORKSPACE/${ASSET_NAME}"
+          echo "asset_name=$ASSET_NAME" >> "$GITHUB_OUTPUT"
+          echo "asset_path=$ASSET_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Package
+        run: |
+          tar -czf "${{ steps.set-outputs.outputs.asset_path }}" \
+            -C "$GITHUB_WORKSPACE/containerd-install" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.set-outputs.outputs.asset_name }}
+          path: ${{ steps.set-outputs.outputs.asset_path }}
+
+      - name: Trigger Pages update
+        if: success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: update-pages

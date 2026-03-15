@@ -1,0 +1,108 @@
+name: Build gRPC for RISC-V
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 10 * *"
+
+jobs:
+  build:
+    runs-on: RISCV64
+    permissions:
+      contents: write
+    outputs:
+      asset_name: ${{ steps.set-outputs.outputs.asset_name }}
+      asset_path: ${{ steps.set-outputs.outputs.asset_path }}
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            jq \
+            cmake \
+            ninja-build \
+            libssl-dev \
+            zlib1g-dev \
+            libabsl-dev \
+            libre2-dev \
+            libcares-dev
+
+      - name: Clean workspace with elevated permissions
+        run: |
+          sudo rm -rf "$GITHUB_WORKSPACE"
+          mkdir -p "$GITHUB_WORKSPACE"
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Get latest gRPC version
+        id: get-version
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/grpc/grpc/releases/latest \
+            | jq -r '.tag_name')
+          VERSION="${LATEST#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest gRPC: $LATEST"
+
+      - name: Clone gRPC
+        run: |
+          git clone --depth=1 \
+            --branch "${{ steps.get-version.outputs.tag }}" \
+            --recurse-submodules \
+            https://github.com/grpc/grpc.git \
+            "$GITHUB_WORKSPACE/grpc-src"
+
+      - name: Build gRPC
+        run: |
+          cd "$GITHUB_WORKSPACE/grpc-src"
+          cmake -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$GITHUB_WORKSPACE/grpc-install" \
+            -DgRPC_INSTALL=ON \
+            -DgRPC_BUILD_TESTS=OFF \
+            -DgRPC_ABSL_PROVIDER=package \
+            -DgRPC_CARES_PROVIDER=package \
+            -DgRPC_RE2_PROVIDER=package \
+            -DgRPC_SSL_PROVIDER=package \
+            -DgRPC_ZLIB_PROVIDER=package \
+            -G Ninja
+          cmake --build build --parallel $(nproc)
+          cmake --install build
+
+      - name: Verify
+        run: |
+          "$GITHUB_WORKSPACE/grpc-install/bin/grpc_cpp_plugin" --version 2>&1 || \
+          ls "$GITHUB_WORKSPACE/grpc-install/bin/"
+
+      - name: Set outputs
+        id: set-outputs
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          ASSET_NAME="grpc-${VERSION}-riscv64-linux.tar.gz"
+          ASSET_PATH="$GITHUB_WORKSPACE/${ASSET_NAME}"
+          echo "asset_name=$ASSET_NAME" >> "$GITHUB_OUTPUT"
+          echo "asset_path=$ASSET_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: Package
+        run: |
+          tar -czf "${{ steps.set-outputs.outputs.asset_path }}" \
+            -C "$GITHUB_WORKSPACE/grpc-install" .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.set-outputs.outputs.asset_name }}
+          path: ${{ steps.set-outputs.outputs.asset_path }}
+
+      - name: Trigger Pages update
+        if: success()
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: update-pages
