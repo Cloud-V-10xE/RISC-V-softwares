@@ -49,9 +49,11 @@ jobs:
       - name: Get latest Python 3.13 version
         id: get-version
         run: |
-          # CPython tags look like v3.13.2 — get latest stable 3.13.x
-          LATEST=$(curl -s "https://api.github.com/repos/python/cpython/releases?per_page=100" \
-            | jq -r '[.[] | select(.prerelease == false) | select(.draft == false) | select(.tag_name | startswith("v3.13."))] | .[0].tag_name')
+          # Use git tags API — more reliable than releases API for finding
+          # specific version branches when newer major versions are active.
+          # Fetches tags matching v3.13.* sorted by version, picks latest.
+          LATEST=$(curl -s "https://api.github.com/repos/python/cpython/git/refs/tags" \
+            | jq -r '[.[] | .ref | ltrimstr("refs/tags/") | select(startswith("v3.13."))] | last')
           VERSION="${LATEST#v}"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=$LATEST" >> "$GITHUB_OUTPUT"
