@@ -27,40 +27,6 @@ This project solves that by building popular packages natively on real RISC-V ha
 
 ---
 
-## 📦 Packages
-
-| Package | Category | Description |
-|---------|----------|-------------|
-| [GCC](https://cloud-v-10xe.github.io/RISC-V-softwares/gcc/) | Compilers | GNU Compiler Collection — latest versions not in apt |
-| [Binutils](https://cloud-v-10xe.github.io/RISC-V-softwares/binutils/) | Compilers | GNU binary utilities |
-| [Coreutils](https://cloud-v-10xe.github.io/RISC-V-softwares/coreutils/) | Compilers | GNU core utilities |
-| [strace](https://cloud-v-10xe.github.io/RISC-V-softwares/strace/) | Compilers | System call tracer |
-| [Node.js](https://cloud-v-10xe.github.io/RISC-V-softwares/nodejs/) | Runtimes | JavaScript runtime — no official riscv64 release |
-| [OpenJDK](https://cloud-v-10xe.github.io/RISC-V-softwares/openjdk/) | Runtimes | Java Development Kit |
-| [.NET SDK](https://cloud-v-10xe.github.io/RISC-V-softwares/dotnet-sdk/) | Runtimes | .NET SDK and runtime |
-| [Python](https://cloud-v-10xe.github.io/RISC-V-softwares/python/) | Runtimes | Python 3.13 with performance improvements |
-| [Ruby](https://cloud-v-10xe.github.io/RISC-V-softwares/ruby/) | Runtimes | Ruby — latest versions not prebuilt for riscv64 |
-| [Go](https://cloud-v-10xe.github.io/RISC-V-softwares/golang/) | Runtimes | Go toolchain — no official riscv64 binary |
-| [PyTorch](https://cloud-v-10xe.github.io/RISC-V-softwares/pytorch/) | ML Frameworks | Machine learning framework by Meta |
-| [TensorFlow](https://cloud-v-10xe.github.io/RISC-V-softwares/tensorflow/) | ML Frameworks | Machine learning platform by Google |
-| [Transformers](https://cloud-v-10xe.github.io/RISC-V-softwares/transformers/) | ML Frameworks | Hugging Face Transformers |
-| [ONNX Runtime](https://cloud-v-10xe.github.io/RISC-V-softwares/onnxruntime/) | ML Frameworks | Cross-platform ML inference |
-| [Bazelisk](https://cloud-v-10xe.github.io/RISC-V-softwares/bazelisk/) | Build Tools | Bazel launcher |
-| [CMake](https://cloud-v-10xe.github.io/RISC-V-softwares/cmake/) | Build Tools | Cross-platform build system |
-| [Ninja](https://cloud-v-10xe.github.io/RISC-V-softwares/ninja/) | Build Tools | Fast build system |
-| [fzf](https://cloud-v-10xe.github.io/RISC-V-softwares/fzf/) | Build Tools | Command-line fuzzy finder |
-| [zstd](https://cloud-v-10xe.github.io/RISC-V-softwares/zstd/) | Build Tools | Fast compression algorithm |
-| [Kubernetes](https://cloud-v-10xe.github.io/RISC-V-softwares/kubernetes/) | Infrastructure | Container orchestration |
-| [Helm](https://cloud-v-10xe.github.io/RISC-V-softwares/helm/) | Infrastructure | Kubernetes package manager |
-| [containerd](https://cloud-v-10xe.github.io/RISC-V-softwares/containerd/) | Infrastructure | Container runtime |
-| [Protobuf](https://cloud-v-10xe.github.io/RISC-V-softwares/protobuf/) | Infrastructure | Protocol Buffers compiler |
-| [gRPC](https://cloud-v-10xe.github.io/RISC-V-softwares/grpc/) | Infrastructure | High-performance RPC framework |
-| [SQLite](https://cloud-v-10xe.github.io/RISC-V-softwares/sqlite/) | Infrastructure | Embedded SQL database |
-
-> Docker images (Flannel, etcd, Kubernetes components) are published to [GitHub Container Registry](https://github.com/orgs/Cloud-V-10xE/packages).
-
----
-
 ## 🚀 Quick Start
 
 ### Download a binary
