@@ -124,7 +124,9 @@
       "id": "cmake",
       "label": "CMake",
       "category": "Build Tools",
-      "description": "Cross-platform build system generator"
+      "description": "Cross-platform build system generator",
+      "workflow": "build-cmake.yml"
+
     },
     {
       "id": "golang",
